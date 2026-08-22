@@ -13,8 +13,21 @@ def get_engine():
     """Attempt connecting to configured MySQL database; fallback to SQLite with warning if MySQL is unreachable."""
     try:
         connect_args = {}
-        if settings.DB_SSL_CA and os.path.exists(settings.DB_SSL_CA):
-            connect_args["ssl_ca"] = str(settings.DB_SSL_CA)
+        ssl_ca_path = None
+        if settings.DB_SSL_CA:
+            if os.path.isfile(settings.DB_SSL_CA):
+                ssl_ca_path = settings.DB_SSL_CA
+            elif (BASE_DIR / settings.DB_SSL_CA).is_file():
+                ssl_ca_path = str(BASE_DIR / settings.DB_SSL_CA)
+        
+        if not ssl_ca_path and (BASE_DIR / "isrgrootx1.pem").is_file():
+            ssl_ca_path = str(BASE_DIR / "isrgrootx1.pem")
+            
+        if not ssl_ca_path and os.path.exists("/etc/ssl/certs/ca-certificates.crt"):
+            ssl_ca_path = "/etc/ssl/certs/ca-certificates.crt"
+            
+        if ssl_ca_path and "mysql" in settings.DATABASE_URL:
+            connect_args["ssl_ca"] = ssl_ca_path
             
         engine = create_engine(
             settings.DATABASE_URL,

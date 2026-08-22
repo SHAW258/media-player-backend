@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -13,6 +13,7 @@ from app.utils.security import (
     decode_access_token,
     oauth2_scheme
 )
+from app.utils.upload import save_image_upload, DEFAULT_AVATAR_URL
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -88,6 +89,62 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
         password_hash=get_password_hash(request.password),
         full_name=request.full_name or "John Doe",
         avatar_url=request.avatar_url or "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        role="user",
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    token = create_access_token(data={"sub": str(new_user.id), "username": new_user.username, "role": new_user.role})
+    return Token(
+        access_token=token,
+        token_type="bearer",
+        user_id=new_user.id,
+        username=new_user.username,
+        email=new_user.email,
+        full_name=new_user.full_name,
+        avatar_url=new_user.avatar_url,
+        role=new_user.role
+    )
+
+@router.post("/register-with-avatar", response_model=Token, status_code=status.HTTP_201_CREATED, summary="Register new user with direct avatar image upload from device")
+def register_with_avatar(
+    username: str = Form(..., description="Unique username"),
+    email: str = Form(..., description="Valid email address"),
+    password: str = Form(..., description="Account password"),
+    full_name: str = Form("John Doe", description="User full display name"),
+    avatar: Optional[UploadFile] = File(None, description="Image file from device (JPEG, PNG, WebP, GIF)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new user account with an avatar image directly uploaded from device.
+    Strictly validates image MIME types (JPEG, PNG, WebP, GIF).
+    """
+    existing_email = db.query(User).filter(User.email == email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists"
+        )
+    
+    existing_username = db.query(User).filter(User.username == username).first()
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username is already taken"
+        )
+    
+    avatar_url = DEFAULT_AVATAR_URL
+    if avatar and avatar.filename:
+        avatar_url = save_image_upload(avatar, subfolder="avatars")
+        
+    new_user = User(
+        username=username,
+        email=email,
+        password_hash=get_password_hash(password),
+        full_name=full_name or "John Doe",
+        avatar_url=avatar_url,
         role="user",
         is_active=True
     )

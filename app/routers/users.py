@@ -1,11 +1,12 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
 from app.routers.auth import get_current_user
 from app.utils.security import get_password_hash
+from app.utils.upload import save_image_upload
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -32,6 +33,22 @@ def update_user_profile(
     if update_data.password is not None:
         current_user.password_hash = get_password_hash(update_data.password)
 
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+@router.post("/avatar", response_model=UserResponse, summary="Upload avatar image from device")
+def upload_avatar(
+    file: UploadFile = File(..., description="Image file from device (JPEG, PNG, WebP, GIF)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload an avatar image directly from device.
+    Only image files (JPEG, PNG, WebP, GIF) are allowed.
+    """
+    avatar_url = save_image_upload(file, subfolder="avatars")
+    current_user.avatar_url = avatar_url
     db.commit()
     db.refresh(current_user)
     return current_user

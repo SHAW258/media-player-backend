@@ -173,11 +173,11 @@ def test_playback_and_queue(token: str):
 
 def test_search():
     print("Testing Universal Search...")
-    search_res = client.get("/api/v1/search?q=Ghost")
+    search_res = client.get("/api/v1/search?q=Kesariya")
     assert search_res.status_code == 200
     data = search_res.json()
     assert len(data["tracks"]) > 0 or len(data["artists"]) > 0 or len(data["albums"]) > 0
-    print(f"  [PASSED] Search for 'Ghost' returned {len(data['tracks'])} tracks, {len(data['artists'])} artists.")
+    print(f"  [PASSED] Search for 'Kesariya' returned {len(data['tracks'])} tracks, {len(data['artists'])} artists.")
 
 def run_all_tests():
     print("=================================================================")

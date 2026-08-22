@@ -4,11 +4,14 @@ Usage:
     python run.py
 """
 
+import os
 import uvicorn
 from app.config import settings
 
 if __name__ == "__main__":
-    print(f">> Starting {settings.APP_NAME} on http://{settings.HOST}:{settings.PORT}")
-    print(f">> Interactive Swagger UI: http://{settings.HOST}:{settings.PORT}/docs")
-    print(f">> Interactive ReDoc UI:   http://{settings.HOST}:{settings.PORT}/redoc")
-    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG)
+    port = int(os.getenv("PORT", settings.PORT))
+    host = os.getenv("HOST", "0.0.0.0")
+    print(f">> Starting {settings.APP_NAME} on http://{host}:{port}")
+    print(f">> Interactive Swagger UI: http://{host}:{port}/docs")
+    print(f">> Interactive ReDoc UI:   http://{host}:{port}/redoc")
+    uvicorn.run("app.main:app", host=host, port=port, reload=False)

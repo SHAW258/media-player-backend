@@ -23,6 +23,8 @@ mediaplayer_fallback.db
 .idea/
 *.swp
 
-# OS
+# OS & Binaries
 .DS_Store
 Thumbs.db
+render.exe
+*.exe

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = 8000
+    PORT: int = int(os.getenv("PORT", 8000))
     
     # Database Settings
     DB_HOST: str = os.getenv("DB_HOST", "localhost")

@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
@@ -66,29 +67,63 @@ def get_current_user_optional(
     except Exception:
         return None
 
-@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED, summary="Register a new user")
-def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    """Create a new user account and return an access token."""
-    existing_email = db.query(User).filter(User.email == request.email).first()
-    if existing_email:
+def validate_credentials_for_signup(username: str, email: str, password: str, confirm_password: Optional[str], db: Session):
+    """Validates password length, confirmation match, and case-insensitive unique username/email."""
+    username_clean = username.strip()
+    if len(username_clean) < 3:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email already exists"
+            detail="Username must be at least 3 characters long."
         )
-    
-    existing_username = db.query(User).filter(User.username == request.username).first()
+        
+    if len(password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters long."
+        )
+        
+    if confirm_password is not None and password != confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match. Please ensure password and confirm password are identical."
+        )
+        
+    # Case-insensitive duplicate username check
+    existing_username = db.query(User).filter(func.lower(User.username) == username_clean.lower()).first()
     if existing_username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username is already taken"
+            detail=f"Username '{username_clean}' is already taken. Please choose another username."
         )
-    
-    new_user = User(
+        
+    # Case-insensitive duplicate email check
+    email_clean = str(email).strip().lower()
+    existing_email = db.query(User).filter(func.lower(User.email) == email_clean).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email address already exists."
+        )
+        
+    return username_clean, email_clean
+
+@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED, summary="Register a new user")
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    """Create a new user account and return an access token."""
+    username_clean, email_clean = validate_credentials_for_signup(
         username=request.username,
         email=request.email,
+        password=request.password,
+        confirm_password=request.confirm_password,
+        db=db
+    )
+    
+    new_user = User(
+        username=username_clean,
+        email=email_clean,
         password_hash=get_password_hash(request.password),
         full_name=request.full_name or "John Doe",
-        avatar_url=request.avatar_url or "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        avatar_url=request.avatar_url or DEFAULT_AVATAR_URL,
         role="user",
         is_active=True
     )
@@ -110,38 +145,33 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/register-with-avatar", response_model=Token, status_code=status.HTTP_201_CREATED, summary="Register new user with direct avatar image upload from device")
 def register_with_avatar(
-    username: str = Form(..., description="Unique username"),
+    username: str = Form(..., description="Unique username (min 3 chars)"),
     email: str = Form(..., description="Valid email address"),
-    password: str = Form(..., description="Account password"),
+    password: str = Form(..., description="Account password (min 6 chars)"),
+    confirm_password: Optional[str] = Form(None, description="Confirm password (must match password)"),
     full_name: str = Form("John Doe", description="User full display name"),
     avatar: Optional[UploadFile] = File(None, description="Image file from device (JPEG, PNG, WebP, GIF)"),
     db: Session = Depends(get_db)
 ):
     """
     Create a new user account with an avatar image directly uploaded from device.
-    Strictly validates image MIME types (JPEG, PNG, WebP, GIF).
+    Strictly validates image MIME types (JPEG, PNG, WebP, GIF) and password confirmation.
     """
-    existing_email = db.query(User).filter(User.email == email).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email already exists"
-        )
-    
-    existing_username = db.query(User).filter(User.username == username).first()
-    if existing_username:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username is already taken"
-        )
+    username_clean, email_clean = validate_credentials_for_signup(
+        username=username,
+        email=email,
+        password=password,
+        confirm_password=confirm_password,
+        db=db
+    )
     
     avatar_url = DEFAULT_AVATAR_URL
     if avatar and avatar.filename:
         avatar_url = save_image_upload(avatar, subfolder="avatars")
         
     new_user = User(
-        username=username,
-        email=email,
+        username=username_clean,
+        email=email_clean,
         password_hash=get_password_hash(password),
         full_name=full_name or "John Doe",
         avatar_url=avatar_url,

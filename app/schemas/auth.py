@@ -25,5 +25,6 @@ class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
+    confirm_password: Optional[str] = None
     full_name: str = "John Doe"
     avatar_url: Optional[str] = None

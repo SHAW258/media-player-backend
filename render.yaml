@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: media-player-backend
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        value: "mysql+pymysql://2msvVqGJ7tDBeDJ.root:8wZXtvGkWxSpBwZJ@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/mediaplayer_db"
+      - key: DB_SSL_CA
+        value: "./isrgrootx1.pem"
+      - key: JWT_SECRET_KEY
+        value: "mediaplayer_super_secret_jwt_key_production_2026"
+      - key: DEBUG
+        value: "false"
